@@ -28,7 +28,7 @@ describe("quota client", () => {
     const h = clientHarness();
     const ag = quotaData.accounts[0].credentials.find((c) => c.id === "ag.json");
     assert.equal(h.credentialHeadroom(ag, "claude-opus-5-5"), 55);
-    assert.equal(h.credentialHeadroom(ag, "gemini-4-argon"), 10);
+    assert.equal(h.credentialHeadroom(ag, "gemini-4-argon"), 50);
     assert.equal(h.credentialHeadroom(ag), 10);
     assert.equal(h.quotaLevel(0), "empty");
     assert.equal(h.quotaLevel(12), "low");

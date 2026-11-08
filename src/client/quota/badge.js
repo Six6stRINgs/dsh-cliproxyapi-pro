@@ -96,24 +96,29 @@
             ),
             errorText ? h("p", { className: "dcpa-q-pop-text", "data-tone": "error" }, errorText) : null,
             loadingFirst ? h("p", { className: "dcpa-q-pop-text" }, t("qPeekLoading")) : null,
-            !loadingFirst && entries.length === 0 ? h("p", { className: "dcpa-q-pop-text" }, t("qPeekNoCreds")) : null,
-            entries.map(({ cred, windows, headroom }, index) =>
-              h(
-                "div",
-                { key: cred.id, className: "dcpa-q-pop-cred" },
+            (() => {
+              const displayEntries = entries.filter(({ cred }) => cred.status !== "disabled");
+              if (!loadingFirst && displayEntries.length === 0) {
+                return h("p", { className: "dcpa-q-pop-text" }, t("qPeekNoCreds"));
+              }
+              return displayEntries.map(({ cred, windows, headroom }, index) =>
                 h(
                   "div",
-                  { className: "dcpa-q-pop-who" },
-                  h("span", { className: "dcpa-q-tag" }, providerName(t, cred.provider)),
-                  h("span", { className: "dcpa-q-name", title: cred.label || cred.id }, cred.label || cred.id),
-                  index === 0 && cred.status === "active" && headroom !== null && entries.length > 1
-                    ? h("span", { className: "dcpa-q-tag", "data-tone": "success" }, t("qPeekBest"))
-                    : null,
-                  CredentialTags({ t, cred })
-                ),
-                h(CredentialWindows, { t, cred, windows, now })
-              )
-            ),
+                  { key: cred.id, className: "dcpa-q-pop-cred" },
+                  h(
+                    "div",
+                    { className: "dcpa-q-pop-who" },
+                    h("span", { className: "dcpa-q-tag" }, providerName(t, cred.provider)),
+                    h("span", { className: "dcpa-q-name", title: cred.label || cred.id }, cred.label || cred.id),
+                    index === 0 && cred.status === "active" && headroom !== null && displayEntries.length > 1
+                      ? h("span", { className: "dcpa-q-tag", "data-tone": "success" }, t("qPeekBest"))
+                      : null,
+                    CredentialTags({ t, cred })
+                  ),
+                  h(CredentialWindows, { t, cred, windows, now })
+                )
+              );
+            })(),
             h(
               "div",
               { className: "dcpa-q-pop-foot" },
