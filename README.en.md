@@ -14,7 +14,7 @@ Enter a server URL and an API key, and the plugin reads the CPA model catalog an
 - **Works out of the box**: on the first connection, the newest model of each family in that server's own catalog is checked (at most 12), so the picker isn't flooded with hundreds of models. [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/accounts-and-models.md)
 - **Native protocols**: Claude over Anthropic Messages, GPT / Codex / Grok over OpenAI Responses, everything else over OpenAI Chat — fewer protocol translations inside CPA. [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/accounts-and-models.md)
 - **Visual management**: check models and edit per-model parameters in the settings panel. By default the plugin registers no agent tool, so it takes no model context (the optional generation tool `generate_media` is switched on in the Generation tab). [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/accounts-and-models.md)
-- **Channel quota**: see each channel's remaining quota per credential, with a badge for the current model in the composer; failed queries pause automatic refresh. [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/quota.md)
+- **Channel quota**: see each channel's remaining quota per credential, with a badge for the current model in the composer and a quick view of every account in the sidebar footer; failed queries pause automatic refresh. [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/quota.md)
 - **Images and videos**: generate and edit images, and generate, edit and extend videos through CPA; the optional agent generation tool is off by default. [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/media.md)
 - **Plugin updates**: automatically check Stable / Beta / Dev channels and choose global / Mainland China sources. With the [DSH plugin market (dshmarket)](https://github.com/dsh-market/dsh-market) installed, new versions install in one click or automatically; otherwise download a verified offline package and upgrade with DSH closed. [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/updates.md)
 - **Secure**: API keys live only in the DSH credentials service, never in configuration files. [Details](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/storage-and-config.md)
@@ -36,7 +36,7 @@ The plugin is published on npm as [`dsh-cliproxyapi-pro`](https://www.npmjs.com/
    dsh-cliproxyapi-pro
    ```
 
-   To pin a version, write `dsh-cliproxyapi-pro@1.9.1`.
+   To pin a version, write `dsh-cliproxyapi-pro@1.11.0`.
 4. Click **Install**. When it finishes, the dialog offers to enable the plugin right away — accept it.
 
 > If downloads are slow in mainland China, open **Registry** next to the input and choose **the mainland China mirror**.
@@ -65,7 +65,7 @@ In **Add plugin**, or as the `plugin_manager` `target`, you can also enter:
 
 | Source | What to enter |
 |---|---|
-| A released version | `git+https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro.git#v1.9.1` |
+| A released version | `git+https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro.git#v1.11.0` |
 | Latest development version | `git+https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro.git#main` |
 | Offline package | Download [`dsh-cliproxyapi-pro.tgz`](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/releases/latest/download/dsh-cliproxyapi-pro.tgz) (always the latest release) and enter its absolute local path |
 | Local source (development) | Absolute path of a cloned repository; installed as a link, so code changes go live when the plugin reloads |
@@ -76,7 +76,7 @@ All versions are listed under [Releases](https://github.com/TinyBOOOOM/dsh-clipr
 
 1. **Open the settings panel**: **Settings** → the **CLIProxyAPI** page in the left navigation (accounts, models and protocols live there). The plugin's own updates are on sidebar **Plugins** → **CLIProxyAPI** and on **Settings** → **Built-in plugins** → the **CLIProxyAPI** tab; those two places contain only update features.
 2. **Add an account**: click **+ Add Account**, enter an account name, the **Base URL** (e.g. `http://127.0.0.1:8317`, without `/v1`) and the **API Key** (leave it empty for a local CPA without authentication), then click **Connect**. A successful connection creates and enables the account; on failure the reason is shown so you can fix it, or choose **Add Anyway (Disabled)**.
-3. **Choose models**: the account's **Models** tab lists every model on the server, with the newest model of each family already checked. Adjust the selection and click **Save & Apply** at the bottom.
+3. **Choose models**: the account's **Models** tab lists every model on the server, with the recommended models already checked by product line (the newest Claude Opus, Sonnet, Fable, …, informed by [online model info](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/en/accounts-and-models.md#recommendations-and-suggestions), on by default and download only). Adjust the selection and click **Save & Apply** at the bottom.
 4. **Use them**: open the model picker in a conversation; the models appear in a group named after the account.
 
 If CPA runs on this machine on the default port `8317` without a key, there is nothing to fill in: the plugin finds it automatically.

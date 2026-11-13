@@ -14,7 +14,7 @@
 - **开箱即用**：首次连接时按该服务自己的模型目录，为每个模型家族勾选最新的一个（最多 12 个），模型选择器不会被上百个模型淹没。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/accounts-and-models.md)
 - **原生协议**：Claude 走 Anthropic Messages，GPT / Codex / Grok 走 OpenAI Responses，其余走 OpenAI Chat，减少 CPA 的协议转换。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/accounts-and-models.md)
 - **可视化管理**：设置面板里勾选模型、编辑单个模型的参数。默认不注册 Agent 工具，不占用模型上下文（可选的生成工具 `generate_media` 需在「生成」标签手动打开）。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/accounts-and-models.md)
-- **渠道额度**：按凭证查看各渠道的剩余额度，对话框里的徽标显示当前模型的额度；查询失败会暂停自动刷新。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/quota.md)
+- **渠道额度**：按凭证查看各渠道的剩余额度，对话框里的徽标显示当前模型的额度，侧边栏底部可快速查看所有账号；查询失败会暂停自动刷新。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/quota.md)
 - **生图 / 生视频**：通过 CPA 生成和编辑图片，生成、编辑和延长视频；可选的 agent 生成工具默认关闭。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/media.md)
 - **插件更新**：自动检查稳定 / Beta / 开发通道，可选择全球 / 中国大陆下载源；装有 [DSH 插件市场（dshmarket）](https://github.com/dsh-market/dsh-market) 时可一键或自动安装新版本，否则下载校验离线包，在关闭 DSH 后手动升级。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/updates.md)
 - **安全**：API Key 只保存在 DSH 凭证服务里，不写入任何配置文件。 [详解](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/storage-and-config.md)
@@ -36,7 +36,7 @@
    dsh-cliproxyapi-pro
    ```
 
-   需要固定版本时可以写成 `dsh-cliproxyapi-pro@1.9.1`。
+   需要固定版本时可以写成 `dsh-cliproxyapi-pro@1.11.0`。
 4. 点击 **安装**，完成后点击 **立即启用**。
 
 > 在中国大陆下载慢，可以点输入框旁的 **安装源**，切换到 **中国大陆镜像源**。
@@ -65,7 +65,7 @@ dsh plugin --profile <profile 名称> add dsh-cliproxyapi-pro
 
 | 来源 | 填写内容 |
 |---|---|
-| 某个发布版本 | `git+https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro.git#v1.9.1` |
+| 某个发布版本 | `git+https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro.git#v1.11.0` |
 | 最新开发版 | `git+https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro.git#main` |
 | 离线安装包 | 下载 [`dsh-cliproxyapi-pro.tgz`](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/releases/latest/download/dsh-cliproxyapi-pro.tgz)（始终是最新版），填写它的本地绝对路径 |
 | 本地源码（开发用） | 克隆后的仓库目录绝对路径；以链接方式安装，改代码后重载插件即生效 |
@@ -76,7 +76,7 @@ dsh plugin --profile <profile 名称> add dsh-cliproxyapi-pro
 
 1. **打开设置面板**：**设置** → 左侧导航的 **CLIProxyAPI** 页（账号、模型与协议都在这里）。插件自身的更新在左侧栏 **插件** → **CLIProxyAPI**，或 **设置** → **内置插件** → **CLIProxyAPI** 标签页，这两处只有更新功能。
 2. **添加账号**：点 **+ 添加账号**，填账号名称、**服务地址**（如 `http://127.0.0.1:8317`，不用加 `/v1`）和 **API Key**（本地免密的 CPA 可留空），点 **连接**。连接成功即创建并启用账号；失败时会显示原因，可修正后重试，或选「仍然添加（不启用）」。
-3. **选择模型**：在账号的 **模型** 标签里，CPA 上的全部模型已列出，并已为每个家族勾好最新的一个。按需增减后点底部的 **保存并应用**。
+3. **选择模型**：在账号的 **模型** 标签里，CPA 上的全部模型已列出，并已按产品线勾好推荐模型（Claude Opus / Sonnet / Fable 等各取最新，参考默认开启、只下载不上传的[在线模型资料](https://github.com/TinyBOOOOM/dsh-cliproxyapi-pro/blob/main/docs/zh/accounts-and-models.md#推荐与选择建议)）。按需增减后点底部的 **保存并应用**。
 4. **开始使用**：回到对话框，打开模型选择器，就能在以账号名称命名的分组里看到这些模型。
 
 CPA 就在本机默认端口 `8317` 且没有设置密钥时，什么都不用填，插件会自动发现它。

@@ -11,6 +11,7 @@
   - The **Enabled** switch and **Clear Key** call `actions.patch` with one field and never bump `rev`; `actions.save` sends the full draft (without `enabled`) and bumps `rev`.
   - Dirty state = draft vs live `account.config` + selection/overrides + key draft; one sticky save bar; account switches confirm before discarding.
   - Secondary help text uses `InfoTip` (button + `role="tooltip"`), never `title` attributes.
+  - The Models tab starts with the stateless `ModelAdvice`: the global **Online Model Info** switch (saved at once through `actions.patch` with `onlineModelInfo`, no `rev` bump) with `global.modelInfo` status, and `account.suggestions` filtered to the current draft; its buttons only edit the draft selection. Recommended rows carry a badge whose reason (`recommendationReason()` over `account.recommendations`) is an `InfoTip`.
 - `conversation.input.right` also holds `${NS}:media` (order 9990, left of the quota badge) and `conversation.hero.options` holds `${NS}:media-hero`: `MediaChip`, the session's **two separate** image- and video-model buttons (picture / camera icon + the model used; each opens only its own kind's menu, grouped by account; no thumbnails; results live in the chat rows).
   - This session's agent rules are a **secondary menu** reached from an "agent generation settings" footer button in either model menu, never mixed into the model lists.
   - Its inject passes only `{ sessionId }`; it loads `media/session` on mount, session change and each open, and retries (3 s, 10 s, then every 30 s) only while the host offers no generation model or reports `catalogIncomplete`, uses its own `mediaChips` presence like the badge, and renders nothing without a generation model.
@@ -36,7 +37,11 @@
 - `conversation.input.right` (order 10000; the composer renders this list immediately before the model selector) renders `QuotaBadge`.
   - Its registration `inject(sessionId)` passes a resolver for `modelDirectories.directoryFor(sessionId).store` from ui-model-selection (resolved at render, see below); the badge reads `pending ?? current` `{ provider, model }` and calls `summarizeModelQuota()`, which looks only inside the account whose `routes` contain that provider and only at `modelIndex[model]`.
   - It renders nothing for other routes or when the account has no management key.
-  - Its peek is `position: fixed` inside the component (no portal, nothing appended to `document.body`).
+  - Its peek is `position: fixed` inside the component (no portal, nothing appended to `document.body`). DSH's active composer seat is sticky with `will-change: transform`, so it, not the viewport, is the containing block of fixed descendants; `useAnchoredPeek()` (shared with `MediaChip`'s menu) renders the peek hidden at `left: 0; bottom: 0`, derives that box's left/bottom edges from where the peek landed, converts the viewport anchor position into it, keeps the peek inside the viewport and the clipping ancestors of that box (the chat scroller), and follows the anchor every animation frame while open (state changes only when the placement moves).
+- `sidebar.footer.action` (root scope, owner props `{ wide }`) holds `${NS}:quota-sidebar` → `SidebarQuota`, built like DSH's native footer buttons (42 px row with label and trailing count while wide, a 36 px round button in the collapsed rail).
+  - It summarizes the credentials of every account with `keyConfigured && enabled !== false` (`sidebarQuotaSummary()`: healthy / usable, where usable leaves out disabled or failing credentials) and renders nothing until such an account exists; its peek (same `useAnchoredPeek()` / `useDismissPeek()`, inside the component) lists each such account with `QuotaSummary`, its credentials (`CredentialWindows`) and an account-scoped refresh.
+  - Global switch `sidebarQuota` (default on): the quota snapshot carries it as `sidebar`; once it reads `false` the entry renders nothing and passes `null` to `useQuota()` (no subscription, no polling for it). `SidebarQuotaSwitch` is the first row of `CpaSettingsPanel` (above the account bar, outside every account draft) and the peek footer has **Hide from sidebar**; both call `saveSidebarQuota()` (a globals-only `save` POST without `accountId`), which then calls `announceSidebarQuota(on)` (`core/presence.js`). The entry's in-page answer overrides the last snapshot, and `CpaSettingsPanel` listens too, patching `data.global.sidebarQuota` without a `rev` bump. Hooks 0/1 are that override and the sticky "seen off" state (tests use `clientHarness({ loading: false })`).
+  - While on, it shares `sharedQuota`, so the store polls whenever the page is open. `useQuota()` re-checks the snapshot right after subscribing: the sidebar and the composer badge mount together, and the first one's load can land between the second one's render and its subscription.
 - DSH renders `conversation.input.right` only when the session's input state exists (a bound session), but the New Session hero already shows the model selector.
   - A second entry `${NS}:quota-hero` in `conversation.hero.options` renders `QuotaBadge` with `placement: "hero"`; `useBadgePlacement()` hides it while a composer badge for the same `sessionId` is mounted (in-memory `composerBadges` presence counts), so exactly one badge shows.
   - Both entries share `injectDirectory` (`{ resolveDirectory, sessionId }`).
@@ -47,7 +52,7 @@
 - One page-wide `createQuotaStore()` (`sharedQuota`) polls `quota/status` only while subscribed (60 s; 4 s while the host reports `refreshing`) and is disposed with the activation.
   - Consecutive status failures override stale `refreshing` with 60 / 120 / 240 / 300 s backoff; an accepted successful GET or mutation resets it.
   - Account/credential failures show localized automatic-refresh-paused guidance.
-- `settings.section` (id `SETTINGS_SECTION_ID` = `cliproxyapi`, like dshmarket's `market` section): `CpaSettingsPanel` owns account server data and notices; `AccountPanel` drafts reload when `rev` changes (save, discard, account switch).
+- `settings.section` (id `SETTINGS_SECTION_ID` = `cliproxyapi`, like dshmarket's `market` section): `CpaSettingsPanel` owns account server data and notices, and starts with the all-account `SidebarQuotaSwitch`; `AccountPanel` drafts reload when `rev` changes (save, discard, account switch).
   - It contains no update UI.
   - The section has no icon field; the shell shows its default glyph.
   - Do not patch the nav DOM to add one (dshmarket does; it breaks the "no DOM writes outside the component" rule).
@@ -72,7 +77,7 @@ To change the client: edit `src/client/**`, run `npm run build:client`, then `np
 | Source | Owns |
 |---|---|
 | `core/api.js` | React bindings, ids, `API` / `MARKET_API` paths |
-| `i18n/zh/*`, `i18n/en/*` | Dictionaries by feature: settings, updates, quota, accounts, media |
+| `i18n/zh/*`, `i18n/en/*` | Dictionaries by feature: settings, updates, quota, accounts, media, recommend |
 | `styles/*.css` | `CSS` by feature: base, updates, tabs, quota, accounts, media, chat, badge |
 | `core/helpers.js` | Account draft, request and display helpers |
 | `updates/api.js` | Update error codes and isolated update requests |
@@ -81,11 +86,13 @@ To change the client: edit `src/client/**`, run `npm run build:client`, then `np
 | `settings/fields.js` | `InfoTip`, form controls, status summaries |
 | `settings/section.js` | `CpaSettingsPanel` |
 | `settings/add-account.js` | `AddAccountForm` |
+| `settings/model-advice.js` | `ModelAdvice` (online-info switch, selection suggestions), `recommendationReason()` |
 | `settings/account-panel*.part.js` | `AccountPanel` (Connection / Models / Generation / Quota tabs) |
 | `settings/page.js` | `CpaSectionPage` |
 | `media/helpers.js`, `media/panel.js` | `MediaPanel` and its helpers |
-| `quota/helpers.js`, `quota/store.js`, `quota/panel.js`, `quota/badge.js` | `summarizeModelQuota()`, `createQuotaStore()`, `QuotaPanel`, `QuotaBadge` |
+| `quota/helpers.js`, `quota/store.js`, `quota/panel.js`, `quota/badge.js`, `quota/sidebar.js` | `summarizeModelQuota()`, `createQuotaStore()`, `QuotaPanel`, `QuotaBadge`, `SidebarQuota`, `SidebarQuotaSwitch`, `saveSidebarQuota()` |
 | `core/presence.js` | Composer/hero presence, `useDirectory()`, clock hooks |
+| `core/peek.js` | `useAnchoredPeek()`, `placePeek()`, `useDismissPeek()`: peek placement inside a transformed containing block and dismissal |
 | `media/chip.js` | `MediaChip` |
 | `media/confirmation-dock.js` | `MediaConfirmationDock` |
 | `chat/tool-id.js`, `chat/tool-row.js` | `toolRunId()`, `mediaConversationDefinition`, `MediaToolRow` / `MediaCommandRow` |
