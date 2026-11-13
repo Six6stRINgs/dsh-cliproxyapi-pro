@@ -1,6 +1,7 @@
 // Quota controller provider protocol, concurrency and response-bound cases.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { QUOTA_TTL_MS } from "../../lib/quota/index.js";
 import { json, apiOk, harness, scenarioHandler, credentialById } from "../helpers/quota-harness.mjs";
 
 describe("quota controller", () => {
@@ -149,5 +150,97 @@ describe("quota controller", () => {
     const h = harness({ handler: () => new Response(big, { status: 200 }) });
     const snap = await h.controller.refresh("default");
     assert.equal(snap.accounts[0].errorCode, "invalid-response");
+  });
+
+  it("retries transient 502/504/network errors on api-call and models without pausing credentials", async () => {
+    let claudeAttempts = 0;
+    let codexAttempts = 0;
+    let codexModelAttempts = 0;
+    const h = harness({
+      timeoutMs: 100,
+      handler: (url, body) => {
+        const u = new URL(url);
+        if (u.pathname === "/v0/management/auth-files/models" && u.searchParams.get("name") === "codex.json") {
+          codexModelAttempts += 1;
+          if (codexModelAttempts === 1) return json(502, { error: "request failed" });
+        }
+        return scenarioHandler({
+          apiCall: (payload) => {
+            if (payload.auth_index === "1" && payload.url.endsWith("/usage")) {
+              claudeAttempts += 1;
+              if (claudeAttempts <= 2) return json(502, { error: "request failed" });
+            }
+            if (payload.auth_index === "2") {
+              codexAttempts += 1;
+              if (codexAttempts === 1) throw new TypeError("socket hang up");
+              if (codexAttempts === 2) return json(200, { status_code: 504, body: "{}" });
+            }
+            return undefined;
+          },
+        })(url, body);
+      },
+    });
+    const snap = await h.controller.refresh("default");
+    const claude = credentialById(snap.accounts[0], "claude.json");
+    const codex = credentialById(snap.accounts[0], "codex.json");
+    assert.equal(claude.quotaState, "ok");
+    assert.equal(claude.autoRefreshPaused, false);
+    assert.equal(codex.quotaState, "ok");
+    assert.equal(codex.autoRefreshPaused, false);
+    assert.deepEqual(codex.models, ["gpt-6.1-sol"]);
+    assert.equal(claudeAttempts, 3);
+    assert.equal(codexAttempts, 3);
+    assert.equal(codexModelAttempts, 2);
+    h.controller.dispose();
+  });
+
+  it("queries Claude usage before profile and skips redundant profile reads once plan is known", async () => {
+    const claudeCalls = [];
+    const h = harness({
+      handler: scenarioHandler({
+        authFiles: () => json(200, { files: [{ name: "claude.json", type: "claude", email: "c@example.com", auth_index: "1" }] }),
+        apiCall: (body) => {
+          if (body.auth_index === "1") claudeCalls.push(body.url);
+          return undefined;
+        },
+      }),
+    });
+    let snap = await h.controller.refresh("default");
+    assert.equal(credentialById(snap.accounts[0], "claude.json").plan, "Max");
+    assert.deepEqual(claudeCalls, [
+      "https://api.anthropic.com/api/oauth/usage",
+      "https://api.anthropic.com/api/oauth/profile",
+    ]);
+
+    claudeCalls.length = 0;
+    h.clock.now += QUOTA_TTL_MS + 1;
+    await h.controller.snapshot();
+    await new Promise((r) => setTimeout(r, 30));
+    snap = await h.controller.snapshot();
+    assert.equal(credentialById(snap.accounts[0], "claude.json").plan, "Max");
+    assert.deepEqual(claudeCalls, ["https://api.anthropic.com/api/oauth/usage"]);
+    h.controller.dispose();
+  });
+
+  it("does not retry non-transient 401, 429 or 500 responses on api-call", async () => {
+    let calls = 0;
+    for (const resp of [
+      () => json(200, { status_code: 401, body: "{}" }),
+      () => json(200, { status_code: 429, body: "{}" }),
+      () => json(500, {}),
+    ]) {
+      calls = 0;
+      const h = harness({
+        timeoutMs: 100,
+        handler: scenarioHandler({
+          authFiles: () => json(200, { files: [{ name: "codex.json", type: "codex", auth_index: "2" }] }),
+          apiCall: () => { calls += 1; return resp(); },
+        }),
+      });
+      const snap = await h.controller.refresh("default");
+      assert.equal(credentialById(snap.accounts[0], "codex.json").autoRefreshPaused, true);
+      assert.equal(calls, 1);
+      h.controller.dispose();
+    }
   });
 });
