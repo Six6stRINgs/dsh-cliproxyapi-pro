@@ -119,15 +119,34 @@
       return typeof pct === "number" && Number.isFinite(pct) ? `${Math.round(pct)}%` : "—";
     }
 
+    const NON_MODEL_GROUPS = new Set(["cowork", "oauth_apps", "extra_usage", "code_review", "cloud_session_credits"]);
+
+    function isAuxiliaryWindow(w) {
+      return w?.appliesToModels === false || NON_MODEL_GROUPS.has(String(w?.group ?? "").toLowerCase());
+    }
+
     function bareModel(id) {
       const lower = String(id ?? "").toLowerCase();
       const slash = lower.indexOf("/");
       return slash >= 0 ? lower.slice(slash + 1) : lower;
     }
 
+    function matchesModelPrefix(bare, prefix) {
+      const lp = String(prefix ?? "").toLowerCase();
+      if (!lp) return false;
+      if (bare.startsWith(lp)) return true;
+      // Match variant orderings like "claude-5-fable" or "claude-4-5-opus" against "claude-fable" / "claude-opus".
+      if (lp.startsWith("claude-")) {
+        const sub = lp.slice(7);
+        return sub !== "" && (bare.includes(`-${sub}`) || bare.startsWith(`${sub}-`) || bare === sub);
+      }
+      return false;
+    }
+
     /** Whether a quota window applies to `modelId` (untagged windows apply to every model). */
     function windowAppliesTo(w, modelId) {
       if (!modelId) return true;
+      if (isAuxiliaryWindow(w)) return false;
       const full = String(modelId).toLowerCase();
       const bare = bareModel(modelId);
       const isArgonModel = bare.includes("argon");
@@ -145,7 +164,10 @@
         });
       }
       if (Array.isArray(w.modelPrefixes) && w.modelPrefixes.length > 0) {
-        return w.modelPrefixes.some((p) => bare.startsWith(String(p).toLowerCase()));
+        return w.modelPrefixes.some((p) => matchesModelPrefix(bare, p));
+      }
+      if (String(w?.group ?? "").toLowerCase() === "fable") {
+        return matchesModelPrefix(bare, "claude-fable") || matchesModelPrefix(bare, "fable");
       }
       return true;
     }
@@ -157,7 +179,27 @@
 
     /** The tightest remaining percentage of the windows that apply, or null. */
     function credentialHeadroom(cred, modelId) {
-      const values = credentialWindows(cred, modelId)
+      let list = credentialWindows(cred, modelId);
+      if (!modelId) {
+        const nonAux = list.filter((w) => !isAuxiliaryWindow(w));
+        if (nonAux.length > 0) list = nonAux;
+        const hasGeneral = list.some(
+          (w) =>
+            (!Array.isArray(w.modelIds) || w.modelIds.length === 0) &&
+            (!Array.isArray(w.modelPrefixes) || w.modelPrefixes.length === 0) &&
+            String(w?.group ?? "").toLowerCase() !== "fable"
+        );
+        if (hasGeneral) {
+          if (Array.isArray(cred?.models) && cred.models.length > 0) {
+            const served = list.filter((w) => cred.models.some((m) => windowAppliesTo(w, m)));
+            if (served.length > 0) list = served;
+          } else {
+            const withoutFable = list.filter((w) => String(w?.group ?? "").toLowerCase() !== "fable");
+            if (withoutFable.length > 0) list = withoutFable;
+          }
+        }
+      }
+      const values = list
         .map((w) => w.remainingPercent)
         .filter((v) => typeof v === "number" && Number.isFinite(v));
       return values.length > 0 ? Math.min(...values) : null;

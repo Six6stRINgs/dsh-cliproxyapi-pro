@@ -243,4 +243,81 @@ describe("quota controller", () => {
       h.controller.dispose();
     }
   });
+
+  it("scopes Claude Fable and auxiliary windows so they never block unrelated models", async () => {
+    const h = harness({
+      handler: scenarioHandler({
+        authFiles: () => json(200, { files: [{ name: "claude.json", type: "claude", auth_index: "1", email: "c@example.com" }] }),
+        models: () => json(200, { models: [{ id: "claude-opus-5-5" }, { id: "claude-fable-5-2" }] }),
+        apiCall: (body) => {
+          if (body.url.endsWith("/usage")) {
+            return apiOk({
+              five_hour: { utilization: 28, resets_at: "2026-10-21T08:00:00Z" },
+              seven_day: { utilization: 86, resets_at: "2026-10-26T00:00:00Z" },
+              seven_day_cowork: { utilization: 100, resets_at: "2026-10-26T00:00:00Z" },
+              seven_day_oauth_apps: { utilization: 100, resets_at: "2026-10-26T00:00:00Z" },
+              iguana_necktie: { utilization: 100, resets_at: "2026-10-26T00:00:00Z" },
+              extra_usage: { monthly_limit: 20, used_credits: 20 },
+            });
+          }
+          if (body.url.endsWith("/profile")) return apiOk({ account: { has_claude_pro: true } });
+          return undefined;
+        },
+      }),
+    });
+    const snap = await h.controller.refresh("default");
+    const claude = credentialById(snap.accounts[0], "claude.json");
+    const byId = Object.fromEntries(claude.windows.map((w) => [w.id, w]));
+    assert.equal(byId["claude:five_hour"].remainingPercent, 72);
+    assert.equal(byId["claude:seven_day"].remainingPercent, 14);
+    assert.deepEqual(byId["claude:iguana_necktie"].modelPrefixes, ["claude-fable", "fable"]);
+    assert.equal(byId["claude:seven_day_cowork"].appliesToModels, false);
+    assert.equal(byId["claude:seven_day_oauth_apps"].appliesToModels, false);
+    assert.equal(byId["claude:extra_usage"].appliesToModels, false);
+    h.controller.dispose();
+  });
+
+  it("prefers limits[] Fable over iguana_necktie and treats dollar-denominated iguana_necktie as auxiliary", async () => {
+    const h = harness({
+      handler: scenarioHandler({
+        authFiles: () => json(200, {
+          files: [
+            { name: "fable.json", type: "claude", auth_index: "1" },
+            { name: "pool.json", type: "claude", auth_index: "2" },
+          ],
+        }),
+        models: () => json(200, { models: [{ id: "claude-opus-5-5" }] }),
+        apiCall: (body) => {
+          if (body.url.endsWith("/profile")) return apiOk({ account: { has_claude_pro: true } });
+          if (body.auth_index === "1") {
+            return apiOk({
+              five_hour: { utilization: 10, resets_at: "2026-10-21T08:00:00Z" },
+              iguana_necktie: { utilization: 100, resets_at: "2026-10-26T00:00:00Z" },
+              limits: [{ kind: "weekly_scoped", scope: { model: { display_name: "Fable 5" } }, percent: 25, resets_at: "2026-10-26T00:00:00Z" }],
+            });
+          }
+          if (body.auth_index === "2") {
+            return apiOk({
+              five_hour: { utilization: 10, resets_at: "2026-10-21T08:00:00Z" },
+              iguana_necktie: { utilization: 100, limit_dollars: 10, used_dollars: 10, remaining_dollars: 0, resets_at: "2026-10-26T00:00:00Z" },
+            });
+          }
+          return undefined;
+        },
+      }),
+    });
+    const snap = await h.controller.refresh("default");
+    const fableCred = credentialById(snap.accounts[0], "fable.json");
+    const fableWin = fableCred.windows.find((w) => w.group === "fable");
+    assert.equal(fableWin.id, "claude:scoped:fable");
+    assert.equal(fableWin.remainingPercent, 75);
+    assert.deepEqual(fableWin.modelPrefixes, ["claude-fable", "fable"]);
+
+    const poolCred = credentialById(snap.accounts[0], "pool.json");
+    const poolWin = poolCred.windows.find((w) => w.id === "claude:iguana_necktie");
+    assert.equal(poolWin.group, "cloud_session_credits");
+    assert.equal(poolWin.appliesToModels, false);
+    assert.equal(poolWin.modelPrefixes, undefined);
+    h.controller.dispose();
+  });
 });

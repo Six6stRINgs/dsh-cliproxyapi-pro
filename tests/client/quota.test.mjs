@@ -530,5 +530,78 @@ describe("quota client", () => {
     assert.equal(timers.size, 0, "no polling without subscribers");
     store.dispose();
   });
+
+  it("excludes Fable and auxiliary windows from unrelated models and never labels 0% as best", () => {
+    const data = structuredClone(quotaData);
+    data.accounts[0].credentials = [
+      {
+        id: "ag.json", label: "ag@example.com", provider: "antigravity", plan: "Pro", status: "active",
+        models: ["claude-opus-5-5"], quotaState: "ok",
+        windows: [
+          { id: "ag:5h", kind: "5h", label: "5h", group: "Claude and GPT models", remainingPercent: 0, resetAt: null, modelPrefixes: ["claude", "gpt"] },
+          { id: "ag:7d", kind: "7d", label: "weekly", group: "Claude and GPT models", remainingPercent: 0, resetAt: null, modelPrefixes: ["claude", "gpt"] },
+        ],
+      },
+      {
+        id: "claude.json", label: "c@example.com", provider: "claude", plan: "Pro", status: "active",
+        models: ["claude-opus-5-5", "claude-sonnet-5-5"], quotaState: "ok",
+        windows: [
+          { id: "claude:five_hour", kind: "5h", label: "five_hour", remainingPercent: 72, resetAt: null },
+          { id: "claude:seven_day", kind: "7d", label: "seven_day", remainingPercent: 14, resetAt: null },
+          { id: "claude:iguana_necktie", kind: "7d", label: "iguana_necktie", group: "fable", remainingPercent: 0, resetAt: null },
+          { id: "claude:seven_day_cowork", kind: "7d", label: "seven_day_cowork", group: "cowork", remainingPercent: 0, resetAt: null, appliesToModels: false },
+          { id: "claude:extra_usage", kind: "30d", label: "extra_usage", group: "extra_usage", remainingPercent: 0, resetAt: null, appliesToModels: false },
+        ],
+      },
+    ];
+    data.accounts[0].modelIndex = {
+      "claude-opus-5-5": ["ag.json", "claude.json"],
+      "claude-fable-5-2": ["claude.json"],
+    };
+
+    const h = clientHarness();
+    const t = (key) => h.zh[key] ?? key;
+    const opusSummary = h.summarizeModelQuota(data, "cli-proxy-messages", "claude-opus-5-5");
+    assert.equal(opusSummary.best, 14);
+    assert.deepEqual(opusSummary.entries.map((e) => e.cred.id), ["claude.json", "ag.json"]);
+    assert.deepEqual(opusSummary.entries[0].windows.map((w) => w.id), ["claude:five_hour", "claude:seven_day"]);
+
+    // Fable model still matches the Fable window, giving 0% for Fable only.
+    const fableSummary = h.summarizeModelQuota(data, "cli-proxy-messages", "claude-fable-5-2");
+    assert.equal(fableSummary.best, 0);
+    assert.equal(h.credentialHeadroom(data.accounts[0].credentials[1], "claude-5-fable"), 0);
+
+    // Overview stats do not treat Fable/auxiliary 0% as exhausted when primary windows remain.
+    assert.equal(h.credentialHeadroom(data.accounts[0].credentials[1]), 14);
+    assert.deepEqual({ ...h.quotaStats(data.accounts[0].credentials) }, { total: 2, healthy: 0, low: 1, empty: 1, issue: 0, unknown: 0 });
+
+    const store = { getSnapshot: () => ({ data, loading: false, error: null, busy: null }), subscribe: () => () => {}, refresh: async () => ({ ok: true }) };
+    const dir = { subscribe: () => () => {}, getSnapshot: () => ({ current: { provider: "cli-proxy-messages", model: "claude-opus-5-5" }, pending: null }) };
+    nodes(h.rerender("QuotaBadge", { t, directory: dir, store }), (n) => n.type === "button")[0].props.onClick();
+    const opened = h.rerender("QuotaBadge", { t, directory: dir, store });
+    assert.ok(content(opened).includes("14%"));
+    const rows = nodes(opened, (n) => n.props?.className === "dcpa-q-pop-cred");
+    assert.equal(rows.length, 2);
+    assert.ok(content(rows[0]).includes("c@example.com") && content(rows[0]).includes("最充足"));
+    assert.ok(content(rows[1]).includes("ag@example.com") && !content(rows[1]).includes("最充足"));
+
+    // When every credential is at 0%, none gets the "最充足" tag.
+    data.accounts[0].credentials[1].windows[0].remainingPercent = 0;
+    data.accounts[0].credentials[1].windows[1].remainingPercent = 0;
+    const hZero = clientHarness();
+    nodes(hZero.rerender("QuotaBadge", { t: (k) => hZero.zh[k] ?? k, directory: dir, store }), (n) => n.type === "button")[0].props.onClick();
+    const zeroOpened = hZero.rerender("QuotaBadge", { t: (k) => hZero.zh[k] ?? k, directory: dir, store });
+    assert.ok(!content(zeroOpened).includes("最充足"), "0% credential is never labeled best");
+
+    // Tied non-zero credentials do not falsely single out one as best.
+    data.accounts[0].credentials[0].windows[0].remainingPercent = 50;
+    data.accounts[0].credentials[0].windows[1].remainingPercent = 50;
+    data.accounts[0].credentials[1].windows[0].remainingPercent = 50;
+    data.accounts[0].credentials[1].windows[1].remainingPercent = 50;
+    const hTie = clientHarness();
+    nodes(hTie.rerender("QuotaBadge", { t: (k) => hTie.zh[k] ?? k, directory: dir, store }), (n) => n.type === "button")[0].props.onClick();
+    const tieOpened = hTie.rerender("QuotaBadge", { t: (k) => hTie.zh[k] ?? k, directory: dir, store });
+    assert.ok(!content(tieOpened).includes("最充足"), "tied credentials are not labeled best");
+  });
 });
 

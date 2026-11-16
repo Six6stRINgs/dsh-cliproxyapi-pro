@@ -85,7 +85,12 @@
                     { className: "dcpa-q-pop-who" },
                     h("span", { className: "dcpa-q-tag" }, providerName(t, cred.provider)),
                     h("span", { className: "dcpa-q-name", title: cred.label || cred.id }, cred.label || cred.id),
-                    index === 0 && cred.status === "active" && headroom !== null && displayEntries.length > 1
+                    index === 0 &&
+                    cred.status === "active" &&
+                    headroom !== null &&
+                    headroom > 0 &&
+                    displayEntries.length > 1 &&
+                    displayEntries.some((e, i) => i > 0 && (e.cred.status !== "active" || e.headroom === null || e.headroom < headroom))
                       ? h("span", { className: "dcpa-q-tag", "data-tone": "success" }, t("qPeekBest"))
                       : null,
                     CredentialTags({ t, cred })
