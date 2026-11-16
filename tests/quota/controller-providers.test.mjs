@@ -320,4 +320,64 @@ describe("quota controller", () => {
     assert.equal(poolWin.modelPrefixes, undefined);
     h.controller.dispose();
   });
+
+  it("uses the endpoint supplied by an Antigravity credential before built-in summary hosts", async () => {
+    const customEndpoint = "https://antigravity-custom.example";
+    const customSummary = `${customEndpoint}/v1internal:retrieveUserQuotaSummary`;
+    const h = harness({
+      handler: scenarioHandler({
+        authFiles: () => json(200, { files: [{ name: "ag.json", type: "antigravity", auth_index: "4", project_id: "proj-1", endpoint: customEndpoint }] }),
+        models: () => json(200, { models: [{ id: "gemini-4-pro" }] }),
+        apiCall: (body) => body.url === customSummary
+          ? apiOk({ groups: [{ displayName: "Gemini models", buckets: [{ displayName: "Five Hour Limit", window: "5h", remainingFraction: 0.72, resetTime: "2026-10-21T10:00:00Z" }] }] })
+          : undefined,
+      }),
+    });
+
+    const snap = await h.controller.refresh("default");
+    const quotaUrls = h.calls.map((call) => call.body?.url)
+      .filter((url) => typeof url === "string" && url.includes(":retrieveUserQuotaSummary"));
+    const credential = credentialById(snap.accounts[0], "ag.json");
+    assert.deepEqual(quotaUrls, [customSummary]);
+    assert.equal(credential.quotaState, "ok");
+    assert.ok(credential.windows.some((window) => window.group === "Gemini models" && window.remainingPercent === 72));
+    h.controller.dispose();
+  });
+
+  it("falls back to a built-in Gemini summary when the custom Antigravity endpoint is partial", async () => {
+    const customEndpoint = "https://antigravity-hints.example";
+    const customSummary = `${customEndpoint}/v1internal:retrieveUserQuotaSummary`;
+    const dailySummary = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary";
+    const h = harness({
+      handler: scenarioHandler({
+        authFiles: () => json(200, { files: [{
+          name: "ag.json",
+          type: "antigravity",
+          auth_index: "4",
+          project_id: "proj-1",
+          antigravity_capability_hints: { endpoint: customEndpoint },
+        }] }),
+        models: () => json(200, { models: [{ id: "gemini-4-pro" }] }),
+        apiCall: (body) => {
+          if (body.url === customSummary) {
+            return apiOk({ groups: [{ displayName: "Claude and GPT models", buckets: [{ displayName: "Weekly Limit", window: "7d", remainingFraction: 0.2, resetTime: "2026-10-27T00:00:00Z" }] }] });
+          }
+          if (body.url === dailySummary) {
+            return apiOk({ groups: [{ displayName: "Gemini models", buckets: [{ displayName: "Five Hour Limit", window: "5h", remainingFraction: 0.65, resetTime: "2026-10-21T10:00:00Z" }] }] });
+          }
+          return undefined;
+        },
+      }),
+    });
+
+    const snap = await h.controller.refresh("default");
+    const quotaUrls = h.calls.map((call) => call.body?.url)
+      .filter((url) => typeof url === "string" && url.includes(":retrieveUserQuotaSummary"));
+    const credential = credentialById(snap.accounts[0], "ag.json");
+    assert.deepEqual(quotaUrls, [customSummary, dailySummary]);
+    assert.equal(credential.quotaState, "ok");
+    assert.ok(credential.windows.some((window) => window.group === "Gemini models" && window.remainingPercent === 65));
+    assert.ok(!credential.windows.some((window) => window.group === "Claude and GPT models"));
+    h.controller.dispose();
+  });
 });
