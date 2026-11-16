@@ -4,6 +4,11 @@
 
 本插件的所有重要变更。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## Unreleased
+
+### 修复
+- **Antigravity / Gemini 额度识别更完整。** 优先使用 CPA 凭证提供的 Antigravity 配额 endpoint；摘要只返回部分模型组时继续回退查询内置服务；Gemini 4 Argon 的额度窗口独立识别，不与普通 Gemini 额度混淆。
+
 ## 1.11.0 — 2026-11-12
 
 ### 新增

@@ -4,6 +4,11 @@
 
 All notable changes to this plugin. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- **Antigravity / Gemini quota detection is more complete.** The probe first uses the Antigravity endpoint advertised by the CPA credential and falls back to built-in hosts when a summary omits model groups; Gemini 4 Argon quota windows are recognized separately from general Gemini quota.
+
 ## 1.11.0 — 2026-11-12
 
 ### Added
